@@ -1,0 +1,17 @@
+.warning {
+    animation: warning 0.8s infinite linear;
+}
+
+.critical {
+    animation: critical 0.8s infinite linear;
+}
+
+@keyframes warning {
+    from { background-color: #ed7c3a; }
+    to { background-color: white; }
+}
+
+@keyframes critical {
+    from { background-color: #bd0000; }
+    to { background-color: white; }
+}

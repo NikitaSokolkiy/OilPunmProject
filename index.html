@@ -1,10 +1,88 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
-  <meta charset="UTF-8">
-  <title>$Title$</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Мониторинг датчиков нефтяного насоса</title>
+    <link rel="stylesheet" href="style/reset.css">
+    <link rel="stylesheet" href="style/style.css">
+    <link rel="stylesheet" href="style/introPage.css">
+    <link rel="stylesheet" href="style/animation.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-$END$
+<div id="introPage" class="introPage">
+    <h1>Добро пожаловать в систему мониторинга</h1>
+    <button id="enterButton">Войти</button>
+</div>
+<div id="mainContent" style="display:none;">
+    <header>
+        <h2>Мониторинг датчиков</h2>
+        <div class="mainControl">
+            <button id="startBtn">Старт</button>
+            <button id="stopBtn">Стоп</button>
+            <button id="overloadBtn">Им. перег.</button>
+            <button id="resetContainersBtn">Сбросить емкости</button>
+        </div>
+        <div class="current-readings">
+            <h3>Текущие показания</h3>
+            <ul id="currentReadingsList"></ul>
+        </div>
+    </header>
+    <main>
+        <div class="container-menu">
+            <div id="notifications" class="notifications">
+                <p>Выберите систему</p>
+            </div>
+            <ul class="listOfSystems">
+                <li class="system" id="well1">Скважина №1<button class="wellOnOff">Вкл</button></li>
+                <li class="system" id="well2">Скважина №2<button class="wellOnOff">Вкл</button></li>
+                <li class="system" id="well3">Скважина №3<button class="wellOnOff">Вкл</button></li>
+                <li class="system" id="upn">Установка подготовки нефти (УПН)<button class="wellOnOff">Вкл</button></li>
+                <li class="system" id="dns">Дожимная насосная станция (ДНС)<button class="wellOnOff">Вкл</button></li>
+                <li class="system" id="oilContainer1">Емкость для нефти №1<button class="wellOnOff">Вкл</button></li>
+                <li class="system" id="oilContainer2">Емкость для нефти №2<button class="wellOnOff">Вкл</button></li>
+                <li class="system" id="pipeline">Трубопровод<button class="wellOnOff">Вкл</button></li>
+                <li class="system" id="gasDaistor">Газосепаратор<button class="wellOnOff">Вкл</button></li>
+            </ul>
+        </div>
+        <div class="systemGraphic">
+            <canvas id="sensorChart"></canvas>
+        </div>
+        <div class="sensorsValues"></div>
+    </main>
+    <div class="logs">
+        <h3>Логи</h3>
+        <ul id="logList"></ul>
+    </div>
+    <div class="history">
+        <h3>История показаний</h3>
+        <select id="historyFilter">
+            <option value="">Все системы</option>
+            <option value="well1">Скважина №1</option>
+            <option value="well2">Скважина №2</option>
+            <option value="well3">Скважина №3</option>
+            <option value="upn">УПН</option>
+            <option value="dns">ДНС</option>
+            <option value="oilContainer1">Емкость №1</option>
+            <option value="oilContainer2">Емкость №2</option>
+            <option value="pipeline">Трубопровод</option>
+            <option value="gasDaistor">Газосепаратор</option>
+        </select>
+        <table id="historyTable">
+            <thead>
+            <tr>
+                <th>Система</th>
+                <th>Датчик</th>
+                <th>Значение</th>
+                <th>Время</th>
+            </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</div>
+<script type="module" src="JS/index.js"></script>
+<script type="module" src="JS/introPage.js"></script>
 </body>
 </html>
