@@ -1,3 +1,4 @@
+/* Анимации для визуального индикации состояний (ЛР4) */
 .warning {
     animation: warning 0.8s infinite linear;
 }

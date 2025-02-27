@@ -1,28 +1,38 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
+    <!-- Определение кодировки и адаптивности страницы -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Мониторинг датчиков нефтяного насоса</title>
+    <!-- Подключение стилей для сброса и базового оформления -->
     <link rel="stylesheet" href="style/reset.css">
     <link rel="stylesheet" href="style/style.css">
     <link rel="stylesheet" href="style/introPage.css">
     <link rel="stylesheet" href="style/animation.css">
+    <!-- Библиотека для построения графиков -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Плагин для аннотаций на графиках (для отображения уставных значений) -->
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.2.1/dist/chartjs-plugin-annotation.min.js"></script>
 </head>
 <body>
+<!-- Вступительная страница для начального экрана (ЛР2: пользовательский интерфейс) -->
 <div id="introPage" class="introPage">
     <h1>Добро пожаловать в систему мониторинга</h1>
     <button id="enterButton">Войти</button>
 </div>
+<!-- Основное содержимое, скрытое при загрузке -->
 <div id="mainContent" style="display:none;">
     <header>
         <h2>Мониторинг датчиков</h2>
         <div class="mainControl">
+            <!-- Кнопки управления для ЛР2, ЛР6 -->
             <button id="startBtn">Старт</button>
             <button id="stopBtn">Стоп</button>
             <button id="overloadBtn">Им. перег.</button>
-            <button id="resetContainersBtn">Сбросить емкости</button>
+            <button id="disconnectBtn">Разорвать соединение</button>
+            <div id="connectionIndicator" class="connection-indicator">Подключено</div>
+            <button id="reconnectBtn" style="display:none;">Восстановить соединение</button>
         </div>
         <div class="current-readings">
             <h3>Текущие показания</h3>
@@ -35,18 +45,23 @@
                 <p>Выберите систему</p>
             </div>
             <ul class="listOfSystems">
+                <!-- Список систем для мониторинга (все системы для ЛР2) -->
                 <li class="system" id="well1">Скважина №1<button class="wellOnOff">Вкл</button></li>
                 <li class="system" id="well2">Скважина №2<button class="wellOnOff">Вкл</button></li>
                 <li class="system" id="well3">Скважина №3<button class="wellOnOff">Вкл</button></li>
                 <li class="system" id="upn">Установка подготовки нефти (УПН)<button class="wellOnOff">Вкл</button></li>
                 <li class="system" id="dns">Дожимная насосная станция (ДНС)<button class="wellOnOff">Вкл</button></li>
-                <li class="system" id="oilContainer1">Емкость для нефти №1<button class="wellOnOff">Вкл</button></li>
-                <li class="system" id="oilContainer2">Емкость для нефти №2<button class="wellOnOff">Вкл</button></li>
                 <li class="system" id="pipeline">Трубопровод<button class="wellOnOff">Вкл</button></li>
                 <li class="system" id="gasDaistor">Газосепаратор<button class="wellOnOff">Вкл</button></li>
             </ul>
         </div>
         <div class="systemGraphic">
+            <!-- Элементы для ЛР5: выбор диапазона времени и график -->
+            <div class="trend-controls">
+                <label for="trendRange">Выберите дату для тренда:</label>
+                <input type="date" id="trendRange" name="trendRange">
+                <button id="showTrend">Показать тренд</button>
+            </div>
             <canvas id="sensorChart"></canvas>
         </div>
         <div class="sensorsValues"></div>
@@ -64,8 +79,6 @@
             <option value="well3">Скважина №3</option>
             <option value="upn">УПН</option>
             <option value="dns">ДНС</option>
-            <option value="oilContainer1">Емкость №1</option>
-            <option value="oilContainer2">Емкость №2</option>
             <option value="pipeline">Трубопровод</option>
             <option value="gasDaistor">Газосепаратор</option>
         </select>
@@ -76,12 +89,15 @@
                 <th>Датчик</th>
                 <th>Значение</th>
                 <th>Время</th>
+                <th>Тип сигнала</th>
+                <th>Интервал опроса</th>
             </tr>
             </thead>
             <tbody></tbody>
         </table>
     </div>
 </div>
+<!-- Подключение скриптов для логики и вступительной страницы -->
 <script type="module" src="JS/index.js"></script>
 <script type="module" src="JS/introPage.js"></script>
 </body>

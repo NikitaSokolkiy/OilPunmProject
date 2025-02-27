@@ -21,13 +21,14 @@ header {
     display: flex;
     justify-content: space-between;
     padding: 10px;
-    background-color: white;
-    color: cornflowerblue;
+    background-color: #007bff;
+    color: white;
 }
 
 .mainControl {
     display: flex;
     gap: 10px;
+    align-items: center;
 }
 
 .mainControl button {
@@ -154,14 +155,24 @@ main {
 .systemGraphic {
     flex: 1;
     display: flex;
+    flex-direction: column;
     justify-content: center;
     align-items: center;
     padding: 10px;
 }
 
+.trend-controls {
+    margin-bottom: 10px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
 #sensorChart {
+    /* Увеличение высоты графика до 800px и снятие ограничения по максимальной ширине */
     width: 100% !important;
-    height: 100% !important;
+    height: 800px !important;
+    /* Удалено max-width: 800px, чтобы график занимал всю доступную ширину */
 }
 
 .logs {
@@ -221,6 +232,23 @@ main {
 
 #historyTable th {
     background-color: #e0e0e0;
+}
+
+.connection-indicator {
+    padding: 5px 10px;
+    margin: 0 5px;
+    border-radius: 10px;
+    font-size: 14px;
+}
+
+.connected {
+    background-color: #28a745; /* Зеленый цвет для подключения */
+    color: white;
+}
+
+.disconnected {
+    background-color: #dc3545; /* Красный цвет для разрыва */
+    color: white;
 }
 
 @keyframes blink {

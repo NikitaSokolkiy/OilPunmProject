@@ -1,166 +1,180 @@
-// Импорт конфигураций датчиков из отдельного файла
 import { sensors } from './sensorsSpec.js';
 
-// Элементы DOM для работы с интерфейсом
-const sensorsContainer = document.querySelector('.sensorsValues'); // Контейнер для отображения значений датчиков
-const notifications = document.getElementById('notifications'); // Элемент для уведомлений пользователя
-const logList = document.getElementById('logList'); // Список для отображения логов
-const currentReadingsList = document.getElementById('currentReadingsList'); // Список текущих показаний датчиков
-const historyTableBody = document.querySelector('#historyTable tbody'); // Тело таблицы истории данных
-const historyFilter = document.getElementById('historyFilter'); // Выпадающий список для фильтрации истории
-const startBtn = document.getElementById('startBtn'); // Кнопка для запуска всех систем
-const stopBtn = document.getElementById('stopBtn'); // Кнопка для остановки всех систем
-const overloadBtn = document.getElementById('overloadBtn'); // Кнопка для имитации перегрузки
+// Элементы DOM для работы с интерфейсом (ЛР2: пользовательский интерфейс)
+const sensorsContainer = document.querySelector('.sensorsValues'); // Контейнер для значений датчиков
+const notifications = document.getElementById('notifications'); // Элемент для уведомлений
+const logList = document.getElementById('logList'); // Список логов
+const currentReadingsList = document.getElementById('currentReadingsList'); // Список текущих показаний
+const historyTableBody = document.querySelector('#historyTable tbody'); // Тело таблицы истории
+const historyFilter = document.getElementById('historyFilter'); // Фильтр истории
+const startBtn = document.getElementById('startBtn'); // Кнопка запуска (ЛР2, ЛР6)
+const stopBtn = document.getElementById('stopBtn'); // Кнопка остановки (ЛР2, ЛР6)
+const overloadBtn = document.getElementById('overloadBtn'); // Кнопка перегрузки (ЛР4)
+const disconnectBtn = document.getElementById('disconnectBtn'); // Кнопка разрыва соединения (ЛР6)
+const connectionIndicator = document.getElementById('connectionIndicator'); // Индикатор состояния соединения (ЛР6)
+const reconnectBtn = document.getElementById('reconnectBtn'); // Кнопка восстановления соединения (ЛР6)
+const trendRange = document.getElementById('trendRange'); // Поле для выбора диапазона времени (ЛР5)
+const showTrendBtn = document.getElementById('showTrend'); // Кнопка показа тренда (ЛР5)
 
-// Объект для хранения состояний систем (генерация данных)
-const systemStates = {};
-// Объект для хранения истории данных датчиков
-let sensorHistory = {};
-// Текущая выбраная система
-let currentSystemId = null;
-// Текущий выбранный тип датчика
-let currentSensorType = null;
-// Текущий график (Chart.js)
-let currentChart = null;
-// Флаг режима перегрузки датчиков
-let isOverloadMode = false;
+const systemStates = {}; // Состояния систем (для отслеживания активности)
+let sensorHistory = {}; // История данных датчиков (ЛР1, ЛР5)
+let currentSystemId = null; // Текущая выбранная система
+let currentSensorType = null; // Текущий выбранный тип датчика
+let currentChart = null; // Текущий график (ЛР5)
+let isOverloadMode = false; // Режим перегрузки (ЛР4)
+let isConnected = true; // Состояние соединения (ЛР6)
+let buffer = []; // Буфер для данных при разрыве связи (пакеты, ЛР6)
+const BUFFER_MAX_PACKETS = 10; // Максимальное количество пакетов в буфере (ЛР6)
+const BUFFER_MAX_TIME = 15000; // Максимальное время буферизации (15 секунд, ЛР6)
+let bufferTimeout = null;
+let isManualDisconnect = false; // Флаг ручного разрыва соединения (ЛР6)
 
-// Объект для отслеживания состояний скважин (true — включена, false — выключена)
-const wellStates = {
-    well1: false, // Состояние скважины №1
-    well2: false, // Состояние скважины №2
-    well3: false  // Состояние скважины №3
+const wellStates = { // Состояния скважин
+    well1: false,
+    well2: false,
+    well3: false
 };
 
-// Функция для добавления сообщений в лог
+// Типы сигналов для датчиков (ЛР3)
+const signalTypes = {
+    pressure: 'analog', // Аналоговый сигнал
+    temperature: 'analog', // Аналоговый сигнал
+    flooding: 'analog', // Аналоговый сигнал
+    fc: 'analog', // Аналоговый сигнал
+    pressureIn: 'analog', // Аналоговый сигнал
+    pressureOut: 'analog', // Аналоговый сигнал
+    tempPumpBearings: 'analog', // Аналоговый сигнал
+    tempEngineBearings: 'analog', // Аналоговый сигнал
+    saltsLeaks: 'analog', // Аналоговый сигнал
+    oilConsumption: 'analog' // Аналоговый сигнал
+};
+
+// Частота опроса для систем (в миллисекундах, ЛР3)
+const pollingIntervals = {
+    well1: 1000,
+    well2: 1000,
+    well3: 1000,
+    upn: 2000,
+    dns: 2000,
+    pipeline: 1500,
+    gasDaistor: 1500
+};
+
+// Функция для добавления сообщений в лог (ЛР2)
 function addLog(message) {
-    // Вывод в консоль для отладки
     console.log(message);
-    // Проверка наличия элемента логов
     if (logList) {
-        // Создание нового элемента списка
         const li = document.createElement('li');
-        // Установка текста лога с текущим временем
         li.textContent = `${new Date().toLocaleTimeString()} - ${message}`;
-        // Добавление лога в список
         logList.appendChild(li);
-        // Прокрутка к последнему сообщению
         logList.scrollTop = logList.scrollHeight;
-    } else {
-        // Сообщение об ошибке, если элемент не найден
-        console.error('Элемент #logList не найден');
     }
 }
 
-// Асинхронная функция для сохранения данных в базу через API сервера
+// Асинхронная функция для сохранения данных в базу данных через API (ЛР1, ЛР3, ЛР6)
 async function saveToDB(systemId, sensorType, value) {
+    if (!isConnected) {
+        buffer.push({ systemId, sensorType, value, timestamp: new Date() });
+        if (buffer.length >= BUFFER_MAX_PACKETS) {
+            buffer = thinBuffer(buffer); // Прореживание буфера (ЛР6)
+            increasePacketInterval(); // Удвоение интервала формирования пакетов (ЛР6)
+        } else if (!bufferTimeout) {
+            bufferTimeout = setTimeout(clearBuffer, BUFFER_MAX_TIME);
+        }
+        return;
+    }
     try {
-        // Отправка POST-запроса на сервер
         const response = await fetch('http://localhost:3000/sensors', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' }, // Указание формата JSON
-            body: JSON.stringify({ system_id: systemId, sensor_type: sensorType, value }) // Данные для отправки
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ system_id: systemId, sensor_type: sensorType, value, signal_type: signalTypes[sensorType], polling_interval: pollingIntervals[systemId] })
         });
-        // Проверка успешности ответа
         if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
     } catch (err) {
-        // Логирование ошибки сохранения
-        addLog(`Ошибка сохранения в БД: ${err.message}`);
+        isConnected = false;
+        updateConnectionIndicator('Разорвано (ошибка)');
+        addLog(`Соединение прервано: ${err.message}`);
+        buffer.push({ systemId, sensorType, value, timestamp: new Date() });
+        if (!bufferTimeout) {
+            bufferTimeout = setTimeout(clearBuffer, BUFFER_MAX_TIME);
+        }
     }
 }
 
-// Асинхронная функция для загрузки данных из базы через API сервера
-async function loadFromDB(filterSystemId = '') {
-    // Проверка наличия элемента таблицы истории
+// Асинхронная функция для загрузки данных из базы данных через API (ЛР1, ЛР5)
+async function loadFromDB(filterSystemId = '', startDate = null, endDate = null) {
     if (!historyTableBody) {
         addLog('Ошибка: #historyTable tbody не найден');
         return;
     }
     try {
-        // Получение данных с сервера
-        const response = await fetch('http://localhost:3000/sensors');
-        // Проверка успешности ответа
+        let url = 'http://localhost:3000/sensors';
+        const params = new URLSearchParams();
+        if (filterSystemId) params.append('system_id', filterSystemId);
+        if (startDate && endDate) {
+            params.append('start_date', startDate);
+            params.append('end_date', endDate);
+        }
+        if (params.toString()) url += `?${params.toString()}`;
+
+        const response = await fetch(url);
         if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
-        // Парсинг JSON-ответа
         const data = await response.json();
-        // Очистка текущей истории
         sensorHistory = {};
-        // Обработка полученных данных
         data.forEach(row => {
             if (!sensorHistory[row.system_id]) sensorHistory[row.system_id] = {};
             if (!sensorHistory[row.system_id][row.sensor_type]) sensorHistory[row.system_id][row.sensor_type] = [];
-            // Добавление записи в историю с временем и значением
             sensorHistory[row.system_id][row.sensor_type].push({
                 time: new Date(row.timestamp).toLocaleTimeString(),
-                value: row.value
+                value: row.value,
+                signal_type: row.signal_type,
+                polling_interval: row.polling_interval
             });
         });
-
-        // Очистка таблицы истории
         historyTableBody.innerHTML = '';
-        // Заполнение таблицы истории
         Object.entries(sensorHistory).forEach(([systemId, sensors]) => {
-            // Фильтрация по указанной системе, если задан фильтр
             if (filterSystemId && systemId !== filterSystemId) return;
             Object.entries(sensors).forEach(([sensorType, values]) => {
                 values.forEach(entry => {
-                    // Создание строки таблицы
                     const row = document.createElement('tr');
-                    row.innerHTML = `
-                        <td>${systemId}</td>
-                        <td>${getSensorName(sensorType)}</td>
-                        <td>${entry.value}</td>
-                        <td>${entry.time}</td>
-                    `;
+                    row.innerHTML = `<td>${systemId}</td><td>${getSensorName(sensorType)}</td><td>${entry.value}</td><td>${entry.time}</td><td>${entry.signal_type}</td><td>${entry.polling_interval}ms</td>`;
                     historyTableBody.appendChild(row);
                 });
             });
         });
-        // Лог успешной загрузки данных
         addLog('Данные загружены из БД');
+        flushBuffer();
+        updateChart(); // Обновить график после загрузки данных (ЛР5)
     } catch (err) {
-        // Логирование ошибки загрузки
         addLog(`Ошибка загрузки из БД: ${err.message}`);
     }
 }
 
-// Обработчики событий для кликов по системам
+// Обработчики событий для кликов по системам (ЛР2)
 document.querySelectorAll('.system').forEach(system => {
     system.addEventListener('click', (e) => {
-        // Игнорирование кликов по кнопке "Вкл/Выкл"
         if (e.target.classList.contains('wellOnOff')) return;
-        // Установка текущей системы
         currentSystemId = e.currentTarget.id;
-        // Лог выбора системы
         addLog(`Выбрана система: ${currentSystemId}`);
-        // Уничтожение текущего графика, если он существует
         if (currentChart) {
             currentChart.destroy();
             currentChart = null;
         }
-        // Сброс текущего типа датчика
         currentSensorType = null;
-        // Отображение значений датчиков для системы
         getSensorsValues(currentSystemId, sensors);
-        // Обновление текущих показаний
         updateCurrentReadings();
     });
 });
 
-// Обработчики событий для кнопок "Вкл/Выкл" систем
+// Обработчики событий для кнопок включения/выключения систем (ЛР2)
 document.querySelectorAll('.wellOnOff').forEach(button => {
     button.addEventListener('click', (e) => {
-        // Предотвращение всплытия события
         e.stopPropagation();
-        // Получение ID системы
         const systemId = e.target.parentElement.id;
-        // Переключение состояния кнопки
         const isActive = e.target.classList.toggle('wellOnOffActive');
-        // Обновление состояния скважины, если это скважина
         if (['well1', 'well2', 'well3'].includes(systemId)) {
             wellStates[systemId] = isActive;
         }
-        // Запуск или остановка генерации данных
         if (isActive) {
             startGenVal(systemId);
             e.target.textContent = 'Выкл';
@@ -168,286 +182,237 @@ document.querySelectorAll('.wellOnOff').forEach(button => {
             stopGenVal(systemId);
             e.target.textContent = 'Вкл';
         }
-        // Проверка состояния систем
-        checkSystemState();
     });
 });
 
-// Обработчик для кнопки "Старт"
+// Обработчики событий для кнопок управления (ЛР2, ЛР6)
 startBtn.addEventListener('click', () => {
-    // Проверка, включена ли хотя бы одна скважина
-    if (!isAnyWellOn()) {
-        notifications.innerHTML = '<p>Нужно включить хотя бы одну скважину!</p>';
-        return;
-    }
-    // Запуск всех систем, кроме скважин
     startAllSystems();
     addLog('Все системы запущены');
 });
 
-// Обработчик для кнопки "Стоп"
 stopBtn.addEventListener('click', () => {
-    // Остановка всех систем
     stopAllSystems();
     addLog('Все системы остановлены');
 });
 
-// Обработчик для кнопки "Имитация перегрузки"
 overloadBtn.addEventListener('click', () => {
-    // Переключение режима перегрузки
     isOverloadMode = !isOverloadMode;
-    // Обновление текста кнопки
     overloadBtn.textContent = isOverloadMode ? 'Остановить перегрузку' : 'Им. перег.';
-    // Лог изменения режима
     addLog(`Режим перегрузки: ${isOverloadMode}`);
 });
 
-// Инициализация при загрузке страницы
+disconnectBtn.addEventListener('click', () => {
+    if (isConnected) {
+        isConnected = false;
+        isManualDisconnect = true;
+        updateConnectionIndicator('Разорвано (ручное)');
+        addLog('Соединение разорвано вручную');
+        reconnectBtn.style.display = 'inline-block';
+    }
+});
+
+reconnectBtn.addEventListener('click', () => {
+    isConnected = true;
+    isManualDisconnect = false;
+    updateConnectionIndicator('Подключено');
+    addLog('Соединение восстановлено');
+    reconnectBtn.style.display = 'none';
+    flushBuffer();
+});
+
+// Обработчик для показа тренда по выбранной дате (ЛР5)
+showTrendBtn.addEventListener('click', () => {
+    const startDate = trendRange.value;
+    if (startDate) {
+        const endDate = new Date(startDate);
+        endDate.setHours(endDate.getHours() + 24); // Диапазон на 24 часа
+        loadFromDB(historyFilter.value, startDate, endDate.toISOString().split('T')[0]);
+    }
+});
+
+// Инициализация при загрузке страницы (ЛР2)
 document.addEventListener('DOMContentLoaded', () => {
-    // Проверка наличия критических DOM-элементов
     if (!sensorsContainer || !historyFilter || !logList) {
         console.error('Один или несколько критических элементов DOM отсутствуют');
         return;
     }
-    // Загрузка данных из БД
     loadFromDB();
-    // Обработчик кликов по датчикам
     sensorsContainer.addEventListener('click', (e) => {
-        // Поиск ближайшего элемента с классом .sensor
         const sensorElement = e.target.closest('.sensor');
         if (sensorElement && currentSystemId) {
-            // Установка текущего типа датчика
             currentSensorType = getSensorTypeFromElement(sensorElement);
-            // Лог выбора датчика
             addLog(`Выбран датчик: ${currentSensorType}`);
-            // Обновление графика
             updateChart();
         }
     });
-    // Периодическая загрузка данных каждые 2 секунды
-    setInterval(() => loadFromDB(historyFilter.value), 2000);
-    // Обработчик изменения фильтра истории
+    setInterval(() => loadFromDB(historyFilter.value), 2000); // Периодическая загрузка данных (ЛР5)
     historyFilter.addEventListener('change', () => loadFromDB(historyFilter.value));
 });
 
-// Функция для отображения значений датчиков системы
+// Функция для отображения значений датчиков выбранной системы (ЛР2, ЛР3)
 function getSensorsValues(systemId, sensors) {
-    // Проверка наличия контейнера для датчиков
     if (!sensorsContainer) return;
-    // Лог отображения датчиков
     addLog(`Отображение датчиков для ${systemId}`);
-    // Очистка контейнера
     sensorsContainer.innerHTML = '';
-    let sensorData; // Данные датчиков для системы
-    // Определение данных в зависимости от системы
+    let sensorData;
     switch (systemId) {
         case 'well1':
         case 'well2':
         case 'well3':
             sensorData = sensors.well;
-            createWellSensor(sensorData); // Создание элементов для скважин
+            createWellSensor(sensorData);
             break;
         case 'upn':
             sensorData = sensors.upn;
-            createWellSensor(sensorData); // Создание элементов для УПН
+            createWellSensor(sensorData);
             break;
         case 'dns':
             sensorData = sensors.dns;
-            createWellSensor(sensorData); // Создание элементов для ДНС
+            createWellSensor(sensorData);
             break;
         case 'pipeline':
             sensorData = sensors.pipeline;
-            createWellSensor(sensorData); // Создание элементов для трубопровода
+            createWellSensor(sensorData);
             break;
         case 'gasDaistor':
             sensorData = sensors.gasDaistor;
-            createWellSensor(sensorData); // Создание элементов для газосепаратора
+            createWellSensor(sensorData);
             break;
         default:
-            // Сообщение об ошибке, если система не найдена
             sensorsContainer.innerHTML = '<li>Система не найдена</li>';
     }
 }
 
-// Функция для создания элементов датчиков для скважин, УПН, ДНС, трубопровода и газосепаратора
+// Функция для создания элементов датчиков (ЛР2)
 function createWellSensor(sensorData) {
-    // Проверка наличия контейнера и данных
     if (!sensorsContainer || !sensorData) return;
-    // Перебор данных датчиков
     for (const [sensorType, sensorConfig] of Object.entries(sensorData)) {
-        // Создание элемента списка
         const sensorItem = document.createElement('li');
-        // Добавление класса для стилизации
         sensorItem.classList.add('sensor');
-        // HTML для отображения датчика
         sensorItem.innerHTML = `
-            <p style="font-weight:bold">${getSensorName(sensorType)}</p> <!-- Название датчика -->
-            <div class="value">-- ${getUnit(sensorType)}</div> <!-- Значение с единицей измерения -->
-            <div class="limits"> <!-- Ограничения норм -->
+            <p style="font-weight:bold">${getSensorName(sensorType)}</p>
+            <div class="value">-- ${getUnit(sensorType)}</div>
+            <div class="limits">
                 <div class="min">min<div class="valueMin">${sensorConfig.normal.min}</div></div>
                 <div class="max">max<div class="valueMax">${sensorConfig.normal.max}</div></div>
                 <div class="avg">avg<div class="valueAvg">--</div></div>
+                <div class="warning">warn<div class="valueWarn">${sensorConfig.warning?.min || '--'}</div></div>
+                <div class="critical">crit<div class="valueCrit">${sensorConfig.critical?.min || '--'}</div></div>
             </div>
         `;
-        // Добавление элемента в контейнер
         sensorsContainer.appendChild(sensorItem);
     }
 }
 
-// Функция для получения единицы измерения датчика
+// Функция для получения единицы измерения датчика по его типу (ЛР3)
 function getUnit(sensorType) {
-    // Словарь единиц измерения для различных типов датчиков
     const units = {
         pressure: 'Бар', temperature: '°C', flooding: '%', fc: 'м³/ч', pressureIn: 'Бар',
         pressureOut: 'Бар', tempPumpBearings: '°C', tempEngineBearings: '°C', saltsLeaks: 'мл/мин',
         oilConsumption: 'м³/ч'
     };
-    // Возвращение единицы измерения или пустую строку, если тип не найден
     return units[sensorType] || '';
 }
 
-// Функция для получения названия датчика
+// Функция для получения названия датчика по его типу (ЛР3)
 function getSensorName(sensorType) {
-    // Словарь названий датчиков
     const names = {
         pressure: 'Давление', temperature: 'Температура', flooding: 'Обводненность', fc: 'Расход жидкости',
         pressureIn: 'Давление на входе', pressureOut: 'Давление на выходе', tempPumpBearings: 'Температура подшипников насоса',
         tempEngineBearings: 'Температура подшипников двигателя', saltsLeaks: 'Утечки сальников',
         oilConsumption: 'Расход газа'
     };
-    // Возвращение названия или исходного типа, если не найдено
     return names[sensorType] || sensorType;
 }
 
-// Функция для начала генерации данных для системы
+// Функция для начала генерации данных для системы (ЛР3)
 function startGenVal(systemId) {
-    // Инициализация состояния системы, если его нет
     if (!systemStates[systemId]) systemStates[systemId] = {};
-    // Установка интервала генерации данных каждую секунду
-    systemStates[systemId].interval = setInterval(() => updateSensors(systemId), 1000);
-    // Лог начала генерации
-    addLog(`Генерация запущена для ${systemId}`);
+    const interval = pollingIntervals[systemId] || 1000;
+    systemStates[systemId].interval = setInterval(() => updateSensors(systemId), interval);
+    addLog(`Генерация запущена для ${systemId} с интервалом ${interval}ms`);
 }
 
-// Функция для остановки генерации данных для системы
+// Функция для остановки генерации данных для системы (ЛР3)
 function stopGenVal(systemId) {
-    // Проверка наличия интервала генерации
     if (systemStates[systemId]?.interval) {
-        // Остановка интервала
         clearInterval(systemStates[systemId].interval);
-        // Удаление интервала из состояния
         delete systemStates[systemId].interval;
-        // Сброс значений датчиков
         resetSensors(systemId);
-        // Лог остановки генерации
         addLog(`Генерация остановлена для ${systemId}`);
     }
 }
 
-// Функция для запуска всех систем, кроме скважин
+// Функция для запуска генерации данных для всех систем (ЛР2, ЛР6)
 function startAllSystems() {
-    // Перебор всех систем в объекте состояний
     Object.keys(systemStates).forEach(systemId => {
-        // Запуск генерации только для систем, не являющихся скважинами
-        if (systemStates[systemId] && !['well1', 'well2', 'well3'].includes(systemId)) {
-            startGenVal(systemId);
-        }
+        startGenVal(systemId);
     });
 }
 
-// Функция для остановки всех систем
+// Функция для остановки генерации данных для всех систем (ЛР2, ЛР6)
 function stopAllSystems() {
-    // Перебор всех систем в объекте состояний
     Object.keys(systemStates).forEach(systemId => {
-        // Проверка наличия интервала для системы
         if (systemStates[systemId]?.interval) {
-            // Остановка интервала
             clearInterval(systemStates[systemId].interval);
-            // Удаление интервала из состояния
             delete systemStates[systemId].interval;
-            // Сброс кнопки в исходное состояние
             const button = document.querySelector(`#${systemId} .wellOnOff`);
             if (button) {
                 button.classList.remove('wellOnOffActive');
                 button.textContent = 'Вкл';
             }
-            // Сброс значений датчиков
             resetSensors(systemId);
         }
     });
-    // Лог остановки всех систем
     addLog('Все системы остановлены');
 }
 
-// Функция для обновления текущих показаний в интерфейсе
+// Функция для обновления текущих показаний (ЛР2)
 function updateCurrentReadings() {
-    // Проверка наличия списка текущих показаний
     if (!currentReadingsList) return;
-    // Очистка списка
     currentReadingsList.innerHTML = '';
-    // Проверка наличия текущей системы и данных
     if (!currentSystemId || !sensorHistory[currentSystemId]) return;
-    // Перебор данных для текущей системы
     Object.entries(sensorHistory[currentSystemId]).forEach(([sensorType, values]) => {
-        // Получение последнего значения
         const lastValue = values[values.length - 1];
-        // Создание элемента списка
         const li = document.createElement('li');
-        // Установка текста с названием, значением и временем
         li.textContent = `${getSensorName(sensorType)}: ${lastValue.value} ${getUnit(sensorType)} (время: ${lastValue.time})`;
-        // Добавление элемента в список
         currentReadingsList.appendChild(li);
     });
 }
 
-// Функция для обновления значений датчиков системы
+// Функция для обновления значений датчиков системы (ЛР3, ЛР4)
 function updateSensors(systemId) {
-    // Обновление значений, если система выбрана
     if (systemId === currentSystemId) getSensorsValues(systemId, sensors);
-    // Получение элементов датчиков
     const sensorElements = sensorsContainer?.querySelectorAll('.sensor') || [];
-    // Получение элемента системы
     const systemElement = document.getElementById(systemId);
-    // Инициализация истории для системы, если её нет
     if (!sensorHistory[systemId]) sensorHistory[systemId] = {};
-    // Статус системы по умолчанию
     let systemStatus = 'normal';
 
-    // Перебор всех элементов датчиков
     sensorElements.forEach(sensor => {
-        // Получение типа датчика
         const sensorType = getSensorTypeFromElement(sensor);
-        // Получение поля значения
         const valueField = sensor.querySelector('.value');
-        let newValue; // Новое значение
+        let newValue;
 
-        // Генерация случайного значения для всех систем (без емкостей)
         newValue = generateRandomValue(systemId, sensorType);
         const sensorData = getSensorData(systemId);
         const config = sensorData[sensorType] || { normal: { min: 0, max: 100 } };
-        // Ограничение значения в пределах норм
-        newValue = Math.max(config.normal.min, Math.min(newValue, config.normal.max));
-        // Имитация перегрузки, если режим активен
+        newValue = Math.max(config.normal.min, Math.min(newValue, config.normal.max)); // Убедимся, что значение в пределах норм
         if (isOverloadMode) {
             const ranges = [
-                config.warning || { min: config.normal.max + 1, max: config.normal.max + 20 },
-                config.critical || { min: config.warning?.max + 1 || config.normal.max + 21 }
+                config.warning || { min: Math.floor(config.normal.max + 1), max: Math.floor(config.normal.max + 20) }, // Целые числа
+                config.critical || { min: Math.floor(config.warning?.max + 1 || config.normal.max + 21) }
             ];
             const range = ranges[Math.floor(Math.random() * ranges.length)];
-            const max = range.max || range.min + 20;
-            newValue = Math.floor(Math.random() * (max - range.min + 1)) + range.min;
+            const max = Math.floor(range.max || range.min + 20);
+            newValue = Math.floor(Math.random() * (max - range.min + 1)) + range.min; // Целые числа в режиме перегрузки
         }
 
-        // Обновление значения в интерфейсе
         valueField.textContent = `${newValue} ${getUnit(sensorType)}`;
-        // Сохранение данных в базу
-        saveToDB(systemId, sensorType, newValue);
+        saveToDB(systemId, sensorType, newValue); // Сохранение в БД (ЛР1, ЛР3)
 
-        // Проверка статуса датчика
         const status = checkSensorStatus(systemId, sensorType, newValue);
-        // Сброс классов состояния
         sensor.classList.remove('warning', 'critical');
-        // Установка класса в зависимости от статуса
         if (status === 'warning') {
             sensor.classList.add('warning');
             if (systemStatus !== 'critical') systemStatus = 'warning';
@@ -456,189 +421,281 @@ function updateSensors(systemId) {
             systemStatus = 'critical';
         }
 
-        // Инициализация истории для типа датчика, если её нет
         if (!sensorHistory[systemId][sensorType]) sensorHistory[systemId][sensorType] = [];
-        // Добавление новой записи в историю
-        sensorHistory[systemId][sensorType].push({ time: new Date().toLocaleTimeString(), value: newValue });
-        // Ограничение размера истории до 50 записей
+        sensorHistory[systemId][sensorType].push({ time: new Date().toLocaleTimeString(), value: newValue, signal_type: signalTypes[sensorType], polling_interval: pollingIntervals[systemId] });
         if (sensorHistory[systemId][sensorType].length > 50) sensorHistory[systemId][sensorType].shift();
     });
 
-    // Обновление состояния системы в интерфейсе
     if (systemElement) {
         systemElement.classList.remove('warning', 'critical');
         if (systemStatus === 'warning') systemElement.classList.add('warning');
         else if (systemStatus === 'critical') systemElement.classList.add('critical');
     }
 
-    // Обновление интерфейса, если система активна
     if (systemId === currentSystemId) {
         updateCurrentReadings();
         if (currentSensorType) updateChart();
     }
+    suggestDecision(systemId); // Системы поддержки принятия решений (ЛР7)
 }
 
-// Функция для сброса значений датчиков системы
+// Функция для сброса значений датчиков системы (ЛР3)
 function resetSensors(systemId) {
-    // Обновление значений датчиков
     getSensorsValues(systemId, sensors);
-    // Получение элементов датчиков
     const sensorElements = sensorsContainer?.querySelectorAll('.sensor') || [];
-    // Получение элемента системы
     const systemElement = document.getElementById(systemId);
-    // Перебор всех элементов датчиков
     sensorElements.forEach(sensor => {
-        // Получение типа датчика
         const sensorType = getSensorTypeFromElement(sensor);
-        // Получение поля значения
         const valueField = sensor.querySelector('.value');
-        // Сброс значения
         valueField.textContent = `-- ${getUnit(sensorType)}`;
-        // Сброс классов состояния
         sensor.classList.remove('warning', 'critical');
     });
-    // Сброс классов состояния системы
     if (systemElement) systemElement.classList.remove('warning', 'critical');
-    // Обновление текущих показаний
     updateCurrentReadings();
 }
 
-// Функция для генерации случайного значения в пределах норм датчика
+// Функция для генерации случайного целого значения с учетом закона распределения (ЛР3, обновлено для целых чисел)
 function generateRandomValue(systemId, sensorType) {
-    // Получение данных датчика
     const sensorData = getSensorData(systemId);
-    // Конфигурация норм или значения по умолчанию
     const config = sensorData[sensorType] || { normal: { min: 0, max: 100 } };
-    // Диапазон норм
     const range = config.normal;
-    // Генерация случайного значения в диапазоне
-    return Math.floor(Math.random() * (range.max - range.min + 1)) + range.min;
+    const signalType = signalTypes[sensorType] || 'analog';
+    const distribution = sensorData[sensorType]?.distribution || 'uniform'; // Закон распределения из конфига
+
+    switch (distribution) {
+        case 'normal':
+            // Простая имитация нормального распределения с округлением до целых чисел
+            const mean = Math.floor((range.max + range.min) / 2); // Целое среднее
+            const stdDev = Math.floor((range.max - range.min) / 6); // Целое стандартное отклонение для 99% охвата
+            let value = mean + Math.floor((Math.random() * 2 - 1) * stdDev * 3); // Округление до целого
+            return clamp(value, Math.floor(range.min), Math.floor(range.max)); // Целые границы
+        case 'uniform':
+            return Math.floor(Math.random() * (Math.floor(range.max) - Math.floor(range.min) + 1)) + Math.floor(range.min); // Целые числа
+        default:
+            return Math.floor(Math.random() * (Math.floor(range.max) - Math.floor(range.min) + 1)) + Math.floor(range.min); // Целые числа
+    }
 }
 
-// Функция для проверки статуса датчика (нормальный, предупреждение, критический)
+// Вспомогательная функция для ограничения целого значения (ЛР3, обновлено для целых чисел)
+function clamp(value, min, max) {
+    return Math.max(Math.floor(min), Math.min(Math.floor(max), Math.floor(value)));
+}
+
+// Функция проверки статуса датчика с уведомлением (ЛР4)
 function checkSensorStatus(systemId, sensorType, value) {
-    // Получение данных датчика
     const sensorData = getSensorData(systemId);
-    // Конфигурация норм или значения по умолчанию
     const config = sensorData[sensorType] || { normal: { min: 0, max: 100 } };
-    // Проверка на критическое состояние
-    if (config.critical && value >= config.critical.min) return 'critical';
-    // Проверка на предупреждение
-    if (config.warning && value >= config.warning.min) return 'warning';
-    // Нормальное состояние
+    if (config.critical && value >= Math.floor(config.critical.min)) { // Используем Math.floor для целых чисел
+        notifications.innerHTML = `<p>Критическое значение для ${getSensorName(sensorType)}: ${value}!</p>`;
+        return 'critical';
+    }
+    if (config.warning && value >= Math.floor(config.warning.min)) { // Используем Math.floor для целых чисел
+        notifications.innerHTML = `<p>Предупреждение для ${getSensorName(sensorType)}: ${value}!</p>`;
+        return 'warning';
+    }
     return 'normal';
 }
 
-// Функция для определения типа датчика по элементу DOM
+// Функция для определения типа датчика по элементу DOM (ЛР2)
 function getSensorTypeFromElement(sensorElement) {
-    // Получение текста названия датчика в нижнем регистре
     const text = sensorElement.querySelector('p').textContent.toLowerCase();
-    // Получение данных текущей системы
     const sensorData = getSensorData(currentSystemId);
-    // Поиск типа датчика по его названию
     return Object.keys(sensorData).find(key => getSensorName(key).toLowerCase() === text) || text;
 }
 
-// Функция для получения данных датчика по системе
+// Функция для получения данных датчика по системе (ЛР3)
 function getSensorData(systemId) {
-    // Определение данных в зависимости от системы
     switch (systemId) {
         case 'well1':
         case 'well2':
         case 'well3':
-            return sensors.well; // Данные для скважин
+            return sensors.well;
         case 'upn':
-            return sensors.upn; // Данные для УПН
+            return sensors.upn;
         case 'dns':
-            return sensors.dns; // Данные для ДНС
+            return sensors.dns;
         case 'pipeline':
-            return sensors.pipeline; // Данные для трубопровода
+            return sensors.pipeline;
         case 'gasDaistor':
-            return sensors.gasDaistor; // Данные для газосепаратора
+            return sensors.gasDaistor;
         default:
-            // Возвращение данных скважины по умолчанию
             return sensors.well;
     }
 }
 
-// Функция для обновления графика с данными датчика
+// Функция для обновления графика с данными датчика (ЛР5)
 function updateChart() {
-    // Получение элемента холста для графика
     const canvas = document.getElementById('sensorChart');
-    // Проверка наличия холста, Chart.js и данных
     if (!canvas || !window.Chart || !currentSystemId || !currentSensorType || !sensorHistory[currentSystemId]?.[currentSensorType]) {
         addLog('График не обновлен: отсутствуют необходимые элементы или данные');
         return;
     }
 
-    // Получение контекста холста
     const ctx = canvas.getContext('2d');
-    // Получение последних 10 записей для графика
-    const data = sensorHistory[currentSystemId][currentSensorType].slice(-10);
-    // Формирование меток времени
+    const sensorData = getSensorData(currentSystemId)[currentSensorType];
+    const data = sensorHistory[currentSystemId][currentSensorType].filter(entry => {
+        if (!trendRange.value) return true;
+        const entryDate = new Date(entry.time);
+        const selectedDate = new Date(trendRange.value);
+        return entryDate.toDateString() === selectedDate.toDateString();
+    }).slice(-50); // Ограничение до 50 записей для производительности
+
     const labels = data.map(entry => entry.time);
-    // Формирование значений
-    const values = data.map(entry => entry.value);
-    // Определение статуса последнего значения
-    const status = checkSensorStatus(currentSystemId, currentSensorType, values[values.length - 1]);
-    // Определение цвета графика по статусу
+    const values = data.map(entry => Math.floor(entry.value)); // Округление до целого для отображения на графике
+    const status = checkSensorStatus(currentSystemId, currentSensorType, values[values.length - 1] || 0);
     const chartColor = status === 'critical' ? 'red' : status === 'warning' ? 'yellow' : 'green';
 
-    // Обновление существующего графика
     if (currentChart) {
         currentChart.data.labels = labels;
         currentChart.data.datasets[0].data = values;
         currentChart.data.datasets[0].borderColor = chartColor;
+        currentChart.options.scales.y.min = Math.floor(sensorData.normal.min); // Целые числа
+        currentChart.options.scales.y.max = Math.floor(sensorData.critical?.min || sensorData.normal.max + 20); // Целые числа
+        currentChart.options.scales.y.ticks.callback = value => `${Math.floor(value)} ${getUnit(currentSensorType)}`; // Целые числа
         currentChart.update();
     } else {
-        // Создание нового графика
         currentChart = new window.Chart(ctx, {
-            type: 'line', // Тип графика — линия
+            type: 'line',
             data: {
-                labels, // Метки времени
+                labels,
                 datasets: [{
-                    label: `${getSensorName(currentSensorType)} (${getUnit(currentSensorType)})`, // Название датчика
-                    data: values, // Значения
-                    borderColor: chartColor, // Цвет линии
-                    fill: false // Без заливки под линией
+                    label: `${getSensorName(currentSensorType)} (${getUnit(currentSensorType)})`,
+                    data: values,
+                    borderColor: chartColor,
+                    fill: false
                 }]
             },
-            options: { // Настройки графика
+            options: {
                 scales: {
-                    x: { title: { display: true, text: 'Время' } }, // Ось X
-                    y: { title: { display: true, text: getUnit(currentSensorType) } } // Ось Y
+                    x: { title: { display: true, text: 'Время' } },
+                    y: {
+                        title: { display: true, text: getUnit(currentSensorType) },
+                        min: Math.floor(sensorData.normal.min), // Целые числа
+                        max: Math.floor(sensorData.critical?.min || sensorData.normal.max + 20), // Целые числа
+                        ticks: {
+                            callback: value => `${Math.floor(value)} ${getUnit(currentSensorType)}` // Целые числа
+                        }
+                    }
+                },
+                plugins: {
+                    annotation: {
+                        annotations: [
+                            {
+                                type: 'line',
+                                yMin: Math.floor(sensorData.normal.max), // Целые числа
+                                yMax: Math.floor(sensorData.normal.max), // Целые числа
+                                borderColor: 'green',
+                                borderWidth: 2,
+                                label: { content: 'Норма', enabled: true }
+                            },
+                            {
+                                type: 'line',
+                                yMin: Math.floor(sensorData.warning?.min || sensorData.normal.max + 1), // Целые числа
+                                yMax: Math.floor(sensorData.warning?.min || sensorData.normal.max + 1), // Целые числа
+                                borderColor: 'yellow',
+                                borderWidth: 2,
+                                label: { content: 'Предупреждение', enabled: true }
+                            },
+                            {
+                                type: 'line',
+                                yMin: Math.floor(sensorData.critical?.min || sensorData.warning?.max + 1), // Целые числа
+                                yMax: Math.floor(sensorData.critical?.min || sensorData.warning?.max + 1), // Целые числа
+                                borderColor: 'red',
+                                borderWidth: 2,
+                                label: { content: 'Критическое', enabled: true }
+                            }
+                        ]
+                    }
                 }
             }
         });
     }
 }
 
-// Функция для проверки, включена ли хотя бы одна скважина
-function isAnyWellOn() {
-    // Проверка состояния всех скважин
-    return Object.values(wellStates).some(state => state === true);
-}
-
-// Функция для проверки состояния систем и управления доступностью
-function checkSystemState() {
-    // Проверка, включена ли хотя бы одна скважина
-    const anyWellOn = isAnyWellOn();
-    if (!anyWellOn) {
-        // Отображение уведомления
-        notifications.innerHTML = '<p>Нужно включить хотя бы одну скважину!</p>';
-        // Остановка работы всех систем, кроме скважин
-        Object.keys(systemStates).forEach(systemId => {
-            if (systemStates[systemId]?.interval && !['well1', 'well2', 'well3'].includes(systemId)) {
-                stopGenVal(systemId);
-                const button = document.querySelector(`#${systemId} .wellOnOff`);
-                if (button) {
-                    button.classList.remove('wellOnOffActive');
-                    button.textContent = 'Вкл';
-                }
-            }
-        });
+// Функция для обновления индикатора состояния соединения (ЛР6)
+function updateConnectionIndicator(status) {
+    connectionIndicator.textContent = status;
+    connectionIndicator.classList.remove('connected', 'disconnected');
+    if (status.includes('Подключено')) {
+        connectionIndicator.classList.add('connected');
     } else {
-        // Сброс уведомления, если скважины включены
-        notifications.innerHTML = '<p>Выберите систему</p>';
+        connectionIndicator.classList.add('disconnected');
     }
+}
+
+// Функция для отправки данных из буфера в БД при восстановлении соединения (ЛР6)
+function flushBuffer() {
+    if (buffer.length > 0 && isConnected && !isManualDisconnect) {
+        const packets = createPackets(buffer);
+        packets.forEach(async (packet) => {
+            await savePacketsToDB(packet);
+        });
+        buffer = [];
+        clearTimeout(bufferTimeout);
+        bufferTimeout = null;
+        addLog('Буфер очищен, данные отправлены в БД');
+    }
+}
+
+// Функция для очистки буфера при превышении времени или размера (ЛР6)
+function clearBuffer() {
+    buffer = [];
+    clearTimeout(bufferTimeout);
+    bufferTimeout = null;
+    addLog('Буфер очищен из-за превышения времени или размера');
+}
+
+// Функция для прореживания буфера при его переполнении (ЛР6)
+function thinBuffer(bufferData) {
+    if (bufferData.length <= BUFFER_MAX_PACKETS) return bufferData;
+    const thinned = [bufferData[0], bufferData[bufferData.length - 1]]; // Сохраняем первый и последний пакеты
+    const step = Math.floor((bufferData.length - 2) / (BUFFER_MAX_PACKETS - 2)) || 1;
+    for (let i = 1; i < bufferData.length - 1; i += step) {
+        thinned.push(bufferData[i]);
+    }
+    return thinned.slice(0, BUFFER_MAX_PACKETS);
+}
+
+// Функция для удвоения интервала формирования пакетов (ЛР6)
+let packetInterval = 1000; // Начальный интервал формирования пакетов (1 секунда)
+function increasePacketInterval() {
+    packetInterval *= 2; // Удвоение интервала
+    addLog(`Интервал формирования пакетов увеличен до ${packetInterval}ms`);
+}
+
+// Функция для создания пакетов из буфера (ЛР6)
+function createPackets(data) {
+    const packets = [];
+    for (let i = 0; i < data.length; i += 10) {
+        packets.push(data.slice(i, i + 10));
+    }
+    return packets;
+}
+
+// Асинхронная функция для пакетной отправки данных в БД (ЛР6)
+async function savePacketsToDB(packet) {
+    try {
+        const response = await fetch('http://localhost:3000/sensors/batch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(packet)
+        });
+        if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+    } catch (err) {
+        addLog(`Ошибка отправки пакета в БД: ${err.message}`);
+    }
+}
+
+// Функция для рекомендаций систем поддержки принятия решений (ЛР7)
+function suggestDecision(systemId) {
+    if (!sensorHistory[systemId]) return;
+    Object.entries(sensorHistory[systemId]).forEach(([sensorType, values]) => {
+        const lastValue = Math.floor(values[values.length - 1]?.value); // Округление до целого для анализа
+        const sensorData = getSensorData(systemId)[sensorType];
+        if (lastValue >= Math.floor(sensorData.critical?.min)) { // Используем Math.floor для целых чисел
+            notifications.innerHTML += `<p>Рекомендация: Немедленно проверьте систему ${systemId}, датчик ${getSensorName(sensorType)} в критическом состоянии (${lastValue}).</p>`;
+        } else if (lastValue >= Math.floor(sensorData.warning?.min)) { // Используем Math.floor для целых чисел
+            notifications.innerHTML += `<p>Рекомендация: Обратите внимание на систему ${systemId}, датчик ${getSensorName(sensorType)} в зоне предупреждения (${lastValue}).</p>`;
+        }
+    });
 }
